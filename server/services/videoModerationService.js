@@ -1,14 +1,25 @@
 const { getGeminiModel } = require("../config/gemini");
 const { bucket } = require("../config/firebase");
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegPath = require("@ffmpeg-installer/ffmpeg").path;
-const ffprobePath = require("@ffprobe-installer/ffprobe").path;
 const fs = require("fs");
 const path = require("path");
 const { promisify } = require("util");
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+// FFmpeg/FFprobe - optional for serverless environments
+let ffmpeg = null;
+let ffmpegAvailable = false;
+
+try {
+  ffmpeg = require("fluent-ffmpeg");
+  const ffmpegPath = require("@ffmpeg-installer/ffmpeg").path;
+  const ffprobePath = require("@ffprobe-installer/ffprobe").path;
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  ffmpeg.setFfprobePath(ffprobePath);
+  ffmpegAvailable = true;
+  console.log("✅ FFmpeg available for video moderation");
+} catch (err) {
+  console.warn("⚠️ FFmpeg not available (serverless environment) - video moderation will use fallback");
+  ffmpegAvailable = false;
+}
 
 const unlinkAsync = promisify(fs.unlink);
 const mkdirAsync = promisify(fs.mkdir);
@@ -44,6 +55,12 @@ const downloadVideoFromFirebase = async (videoUrl) => {
 };
 
 const extractFrames = async (videoPath, frameRate = 0.5) => {
+  // Skip frame extraction if FFmpeg not available (serverless)
+  if (!ffmpegAvailable) {
+    console.warn("⚠️ FFmpeg not available - skipping frame extraction");
+    return [];
+  }
+
   return new Promise((resolve, reject) => {
     const sessionId = Date.now();
     const outputPattern = path.join(FRAMES_DIR, `frame_${sessionId}_%03d.jpg`);
@@ -195,6 +212,25 @@ const moderateLocalVideo = async (videoPath) => {
   let framePaths = [];
 
   try {
+    // Skip moderation if FFmpeg not available (serverless)
+    if (!ffmpegAvailable) {
+      console.warn("⚠️ Video moderation skipped - FFmpeg not available (auto-approving)");
+      // Clean up video file
+      try {
+        if (fs.existsSync(videoPath)) {
+          await unlinkAsync(videoPath);
+        }
+      } catch (err) {
+        console.error("⚠️ Cleanup error:", err);
+      }
+      return {
+        status: "approved",
+        reason: "Auto-approved (moderation unavailable in serverless)",
+        analyzedFrames: 0,
+        flaggedFrames: [],
+      };
+    }
+
     await ensureTempDirs();
 
     const overallStart = Date.now();

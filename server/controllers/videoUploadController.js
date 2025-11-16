@@ -2,7 +2,13 @@ const fs = require("fs");
 const path = require("path");
 const { bucket } = require("../config/firebase");
 const { v4: uuidv4 } = require("uuid");
-const { moderateVideo, moderateLocalVideo } = require("../services/videoModerationService");
+
+// Use serverless-compatible moderation service
+const moderationService = process.env.NODE_ENV === 'production'
+  ? require("../services/videoModerationService.serverless")
+  : require("../services/videoModerationService");
+
+const { moderateVideo, moderateLocalVideo } = moderationService;
 const videoService = require("../services/videoService");
 
 /**
