@@ -38,12 +38,14 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ✅ Cấu hình CORS
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "https://yourdomain.com",
-  "https://www.yourdomain.com",
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://yourdomain.com",
+      "https://www.yourdomain.com",
+    ];
 
 app.use(
   cors({
@@ -108,8 +110,13 @@ app.get("/api/payments/ping", (req, res) => res.send("✅ /api/payments route ho
 
 // ✅ Khởi động server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
-});
 
+// Chỉ listen khi chạy local (không phải Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
+  });
+}
+
+// Export cho Vercel Serverless
 export default app;

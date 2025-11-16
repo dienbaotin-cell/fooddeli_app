@@ -1,12 +1,33 @@
 // server/config/firebase.js  (CommonJS)
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 
 // Tránh init lại nếu file được require nhiều lần
 if (!admin.apps.length) {
+  // Ưu tiên đọc từ environment variable (cho Vercel)
+  let credential;
+  
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Vercel: đọc từ env variable
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      credential = admin.credential.cert(serviceAccount);
+    } catch (error) {
+      console.error("❌ Error parsing FIREBASE_SERVICE_ACCOUNT:", error.message);
+      throw new Error("Invalid FIREBASE_SERVICE_ACCOUNT environment variable");
+    }
+  } else {
+    // Local: đọc từ file
+    try {
+      const serviceAccount = require("./serviceAccountKey.json");
+      credential = admin.credential.cert(serviceAccount);
+    } catch (error) {
+      console.error("❌ serviceAccountKey.json not found. Set FIREBASE_SERVICE_ACCOUNT env variable.");
+      throw error;
+    }
+  }
+
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    // Giữ nguyên bucket bạn đang dùng (vì upload của bạn đã chạy ổn)
+    credential: credential,
     storageBucket: "fooddeli-6d394.firebasestorage.app",
   });
 }
